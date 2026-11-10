@@ -28,6 +28,8 @@
 
 - `add_text`: テキストを配置する
 - `add_media`: 素材を配置する。`files`を渡すと順に並べ、各ファイルを事前検査する
+- `add_object`: エフェクト名（エイリアスの`effect.name`）を指定してobjectを作る。`図形`、`シーン`、フィルタ効果名（例: `ぼかし`）でフィルタオブジェクトなど。`properties`で初期値を同時に設定でき、`effect`を省略した項目は作成したエフェクト自身に設定される。エフェクト名と項目名は実行前に`list_effects`相当の情報で検査する
+- `add_from_alias`: `.object`ファイルと同じ形式のエイリアス文字列からobjectを作る。`add_object`で表せない構成に使う。既存objectのエイリアスは`inspect_object`の`include_alias`で取得できる
 - `update_object`: 位置、名前、設定項目を1つのUndo単位で変更する
 - `duplicate_objects`: エフェクトとアニメーションを保ったまま複製する。`repeat`はオフセット繰り返し、`rows`と`columns`はグリッド複製
 - `delete_objects`: 指定・選択・フォーカスのobjectをまとめて削除する
@@ -87,7 +89,7 @@
 
 ## 一括と診断
 
-- `execute_batch`: 最大100操作を1つの編集区間で実行する。事前検査、`dry_run`、進捗通知、タイムアウト、実行後のobject取得に対応する
+- `execute_batch`: 最大100操作を1つの編集区間で実行する。`add_object`と`add_from_alias`も操作として使える（`add_object`の`properties`で`effect`を空文字にすると作成したエフェクト自身が対象）。事前検査、`dry_run`、進捗通知、タイムアウト、実行後のobject取得に対応する
 - `diagnose_connection`: サーバー、ブリッジ、本体のバージョンと`capabilities`、遅延、制約を返す。`reconnect`でソケットを開き直し、`include_log`で直近の通信を返す
 
 ## 本体バージョンによる違い

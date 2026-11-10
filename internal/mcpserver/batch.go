@@ -85,6 +85,19 @@ func preflightBatch(ctx context.Context, client *bridge.Client, expected mutatio
 					return fmt.Errorf("%s section crosses the object end", prefix)
 				}
 			}
+		case "add_object":
+			base := baseEffectName(operation.Effect)
+			if _, ok := definitions[base]; !ok {
+				definition, err := client.ListEffectItems(ctx, base)
+				if err != nil {
+					return fmt.Errorf("%s effect %q is not available (check list_effects): %w", prefix, base, err)
+				}
+				items := map[string]bool{}
+				for _, item := range definition.Items {
+					items[item.Name] = true
+				}
+				definitions[base] = items
+			}
 		case "delete_effect", "set_effect_state":
 			if hasObject && operation.EffectIndex >= len(object.Effects) {
 				return fmt.Errorf("%s effect_index is out of range", prefix)
@@ -145,7 +158,7 @@ func preflightPlacements(ctx context.Context, client *bridge.Client, expected mu
 	needs := false
 	for _, op := range operations {
 		switch op.Op {
-		case "add_text", "add_media", "duplicate_object", "update_object", "delete_object", "move_section":
+		case "add_text", "add_media", "add_object", "duplicate_object", "update_object", "delete_object", "move_section":
 			needs = true
 		}
 	}
@@ -169,7 +182,7 @@ func preflightPlacements(ctx context.Context, client *bridge.Client, expected mu
 		switch op.Op {
 		case "delete_object":
 			delete(placements, key)
-		case "add_text", "add_media":
+		case "add_text", "add_media", "add_object":
 			if op.Length > 0 {
 				key = -int64(index + 1)
 				p := simulatedPlacement{key: key, layer: *op.Layer, start: *op.Frame, end: *op.Frame + op.Length - 1}

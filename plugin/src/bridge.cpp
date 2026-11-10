@@ -1124,11 +1124,13 @@ json execute_operations(const json& operations, EDIT_SECTION* edit) {
             result["object_id"] = id;
             result["changed"] = true;
             if (operation.contains("properties")) {
-                // Properties without "effect" target the created object's own effect.
+                // Properties without (or with an empty) "effect" target the created object's own effect.
                 json properties = operation.at("properties");
                 if (properties.is_array()) {
                     for (json& property : properties) {
-                        if (property.is_object() && !property.contains("effect")) {
+                        if (property.is_object() &&
+                            (!property.contains("effect") ||
+                             (property.at("effect").is_string() && property.at("effect").get<std::string>().empty()))) {
                             property["effect"] = effect_utf8;
                         }
                     }

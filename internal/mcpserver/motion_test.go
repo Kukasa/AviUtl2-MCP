@@ -93,8 +93,10 @@ type motionBridgeFixture struct {
 	objects []protocol.Object
 	media   protocol.MediaInfo
 	items   map[string][]protocol.EffectItem
-	mu      sync.Mutex
-	calls   []protocol.Request
+	// missingEffects mimics the real bridge returning NOT_FOUND from list_effect_items.
+	missingEffects map[string]bool
+	mu             sync.Mutex
+	calls          []protocol.Request
 }
 
 func newMotionBridgeFixture() *motionBridgeFixture {
@@ -195,6 +197,9 @@ func (f *motionBridgeFixture) answer(request protocol.Request) (any, error) {
 		var params protocol.ListEffectItemsParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			return nil, err
+		}
+		if f.missingEffects[params.Effect] {
+			return nil, fmt.Errorf("effect was not found: %s", params.Effect)
 		}
 		return protocol.EffectItemsResult{Effect: params.Effect, Items: f.items[params.Effect]}, nil
 	case "preflight_media":

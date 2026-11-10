@@ -547,6 +547,7 @@ func New(client *bridge.Client, version string) *mcp.Server {
 			if input.TimeoutMS < 0 || input.TimeoutMS > 300000 {
 				return nil, output, errors.New("timeout_ms must be between 0 and 300000")
 			}
+			normalizeBatchOperations(input.Operations)
 			if err := validateBatchOperations(input.Operations); err != nil {
 				return nil, output, err
 			}
@@ -605,6 +606,7 @@ func New(client *bridge.Client, version string) *mcp.Server {
 	addDiagnosticsTools(server, client, version)
 	addAdvancedEditTools(server, client)
 	addMediaTools(server, client)
+	addObjectTools(server, client)
 	addVisualTools(server, client)
 	addOrganizationTools(server, client)
 	addMotionTools(server, client)
@@ -633,6 +635,17 @@ func validateBatchOperations(operations []protocol.BatchOperation) error {
 		case "add_media":
 			if strings.TrimSpace(operation.File) == "" || operation.Layer == nil || *operation.Layer < 0 || operation.Frame == nil || *operation.Frame < 0 || operation.Length < 0 {
 				return fmt.Errorf("%s add_media requires a file and non-negative layer/frame/length", prefix)
+			}
+		case "add_object":
+			if strings.TrimSpace(operation.Effect) == "" || operation.Layer == nil || *operation.Layer < 0 || operation.Frame == nil || *operation.Frame < 0 || operation.Length < 0 {
+				return fmt.Errorf("%s add_object requires effect and non-negative layer/frame/length", prefix)
+			}
+		case "add_from_alias":
+			if strings.TrimSpace(operation.Alias) == "" || operation.Layer == nil || *operation.Layer < 0 || operation.Frame == nil || *operation.Frame < 0 || operation.Length < 0 {
+				return fmt.Errorf("%s add_from_alias requires alias and non-negative layer/frame/length", prefix)
+			}
+			if len(operation.Properties) > 0 {
+				return fmt.Errorf("%s add_from_alias does not accept properties; set values in the alias or use update_object", prefix)
 			}
 		case "duplicate_object":
 			if err := validateBatchObjectReference(prefix, index, operation); err != nil {

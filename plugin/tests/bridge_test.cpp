@@ -429,15 +429,17 @@ void test_generic_object_creation() {
         {"effect", "図形"}, {"layer", 50}, {"frame", 0}, {"length", 30},
         {"properties", json::array({
             {{"item", "種類"}, {"value", "円"}},
+            {{"effect", ""}, {"item", "サイズ"}, {"value", "200"}},
             {{"effect", "標準描画"}, {"item", "X"}, {"value", "120"}},
         })},
     }, true));
     assert(shape.at("results").at(0).at("changed").get<bool>());
     assert(shape.at("results").at(0).contains("object_id"));
     assert(mock_last_created_effect == L"図形");
-    assert(mock_set_item_log.size() == 2);
+    assert(mock_set_item_log.size() == 3);
     assert(mock_set_item_log[0] == L"図形/種類=円");
-    assert(mock_set_item_log[1] == L"標準描画/X=120");
+    assert(mock_set_item_log[1] == L"図形/サイズ=200");
+    assert(mock_set_item_log[2] == L"標準描画/X=120");
 
     // batch: フィルタオブジェクト・シーン・エイリアスを1つの編集区間で作成する
     const std::string alias = "[Object]\n[Object.0]\neffect.name=図形\n";

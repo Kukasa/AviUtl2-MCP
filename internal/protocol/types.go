@@ -367,6 +367,7 @@ type BatchOperation struct {
 	ObjectID    uint64             `json:"object_id,omitempty"`
 	ResultRef   *int               `json:"result_ref,omitempty"`
 	Text        string             `json:"text,omitempty"`
+	Alias       string             `json:"alias,omitempty"`
 	File        string             `json:"file,omitempty"`
 	Layer       *int               `json:"layer,omitempty"`
 	Frame       *int               `json:"frame,omitempty"`
