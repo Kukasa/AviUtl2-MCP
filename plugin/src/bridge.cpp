@@ -1103,6 +1103,54 @@ json execute_operations(const json& operations, EDIT_SECTION* edit) {
             const std::uint64_t id = register_object(object, edit);
             result["object_id"] = id;
             result["changed"] = true;
+        } else if (op == "add_object") {
+            // Create any object type by effect name (the alias file's effect.name),
+            // e.g. 図形, シーン, or a filter effect name for a filter object.
+            const std::string effect_utf8 = operation.at("effect").get<std::string>();
+            const int layer = operation.at("layer").get<int>();
+            const int frame = operation.at("frame").get<int>();
+            const int length = operation.value("length", 0);
+            if (effect_utf8.empty() || layer < 0 || frame < 0 || length < 0) {
+                throw BridgeError("INVALID_ARGUMENT", "add_object requires effect and non-negative layer/frame/length");
+            }
+            const std::wstring effect = utf8_to_wide(effect_utf8);
+            OBJECT_HANDLE object = edit->create_object(effect.c_str(), layer, frame, length);
+            if (object == nullptr) {
+                throw BridgeError("HOST_REJECTED", "AviUtl2 could not create an object for effect '" + effect_utf8 +
+                                  "' (overlap, or the effect cannot be used as an object)");
+            }
+            created[raw_index] = object;
+            const std::uint64_t id = register_object(object, edit);
+            result["object_id"] = id;
+            result["changed"] = true;
+            if (operation.contains("properties")) {
+                // Properties without "effect" target the created object's own effect.
+                json properties = operation.at("properties");
+                if (properties.is_array()) {
+                    for (json& property : properties) {
+                        if (property.is_object() && !property.contains("effect")) {
+                            property["effect"] = effect_utf8;
+                        }
+                    }
+                }
+                apply_properties(edit, object, properties);
+            }
+        } else if (op == "add_from_alias") {
+            // Create object(s) from alias text in the same format as a .object file.
+            const std::string alias = operation.at("alias").get<std::string>();
+            const int layer = operation.at("layer").get<int>();
+            const int frame = operation.at("frame").get<int>();
+            const int length = operation.value("length", 0);
+            if (alias.empty() || layer < 0 || frame < 0 || length < 0) {
+                throw BridgeError("INVALID_ARGUMENT", "add_from_alias requires alias and non-negative layer/frame/length");
+            }
+            OBJECT_HANDLE object = edit->create_object_from_alias(alias.c_str(), layer, frame, length);
+            if (object == nullptr) {
+                throw BridgeError("HOST_REJECTED", "AviUtl2 could not create an object from the alias (overlap or invalid alias)");
+            }
+            created[raw_index] = object;
+            result["object_id"] = register_object(object, edit);
+            result["changed"] = true;
         } else if (op == "duplicate_object") {
             OBJECT_HANDLE source = operation_object(operation, index, created, edit);
             const char* alias_value = edit->get_object_alias(source);
@@ -1718,6 +1766,7 @@ json dispatch(const json& request) {
     }
 
     const bool editing = method == "add_text" || method == "add_media" ||
+                         method == "add_object" || method == "add_from_alias" ||
                          method == "update_object" || method == "delete_object" ||
                          method == "add_effect" || method == "delete_effect" ||
                          method == "set_effect_state" || method == "execute_batch";

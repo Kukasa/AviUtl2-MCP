@@ -62,7 +62,10 @@ LPCSTR mock_get_item(OBJECT_HANDLE, LPCWSTR, LPCWSTR) {
     return "mock";
 }
 
-bool mock_set_item(OBJECT_HANDLE, LPCWSTR, LPCWSTR, LPCSTR) {
+std::vector<std::wstring> mock_set_item_log;
+
+bool mock_set_item(OBJECT_HANDLE, LPCWSTR effect, LPCWSTR item, LPCSTR value) {
+    mock_set_item_log.push_back(std::wstring(effect) + L"/" + item + L"=" + utf8_to_wide(value));
     return true;
 }
 
@@ -81,7 +84,13 @@ void mock_delete_object(OBJECT_HANDLE handle) {
     as_object(handle)->deleted = true;
 }
 
-OBJECT_HANDLE mock_create_object(LPCWSTR, int layer, int frame, int length) {
+std::wstring mock_last_created_effect;
+std::string mock_last_alias;
+bool mock_reject_create = false;
+
+OBJECT_HANDLE mock_create_object(LPCWSTR effect, int layer, int frame, int length) {
+    if (mock_reject_create) return nullptr;
+    mock_last_created_effect = effect == nullptr ? L"" : effect;
     auto object = std::make_unique<MockObject>();
     static std::int64_t next_native_id = 9007199254741000LL;
     object->native_id = next_native_id++;
@@ -96,7 +105,8 @@ OBJECT_HANDLE mock_create_object(LPCWSTR, int layer, int frame, int length) {
     return result;
 }
 
-OBJECT_HANDLE mock_create_alias(LPCSTR, int layer, int frame, int length) {
+OBJECT_HANDLE mock_create_alias(LPCSTR alias, int layer, int frame, int length) {
+    mock_last_alias = alias == nullptr ? "" : alias;
     return mock_create_object(L"Alias", layer, frame, length);
 }
 
@@ -412,6 +422,58 @@ json request(std::string method, json params = json::object(), bool expected = f
 
 #include "workspace_test.hpp"
 
+void test_generic_object_creation() {
+    // 単体: 図形をエフェクト名で作成し、effect省略の設定値は作成したエフェクトへ向く
+    mock_set_item_log.clear();
+    const json shape = dispatch(request("add_object", {
+        {"effect", "図形"}, {"layer", 50}, {"frame", 0}, {"length", 30},
+        {"properties", json::array({
+            {{"item", "種類"}, {"value", "円"}},
+            {{"effect", "標準描画"}, {"item", "X"}, {"value", "120"}},
+        })},
+    }, true));
+    assert(shape.at("results").at(0).at("changed").get<bool>());
+    assert(shape.at("results").at(0).contains("object_id"));
+    assert(mock_last_created_effect == L"図形");
+    assert(mock_set_item_log.size() == 2);
+    assert(mock_set_item_log[0] == L"図形/種類=円");
+    assert(mock_set_item_log[1] == L"標準描画/X=120");
+
+    // batch: フィルタオブジェクト・シーン・エイリアスを1つの編集区間で作成する
+    const std::string alias = "[Object]\n[Object.0]\neffect.name=図形\n";
+    const json batch = dispatch(request("execute_batch", {{"operations", json::array({
+        {{"op", "add_object"}, {"effect", "ぼかし"}, {"layer", 51}, {"frame", 0}, {"length", 30}},
+        {{"op", "add_object"}, {"effect", "シーン"}, {"layer", 52}, {"frame", 0}},
+        {{"op", "add_from_alias"}, {"alias", alias}, {"layer", 53}, {"frame", 0}, {"length", 30}},
+    })}}, true));
+    assert(batch.at("results").size() == 3);
+    for (const json& result : batch.at("results")) {
+        assert(result.at("changed").get<bool>());
+    }
+    assert(mock_last_created_effect == L"Alias");
+    assert(mock_last_alias == alias);
+
+    // 本体が作成を拒否した場合はHOST_REJECTED
+    mock_reject_create = true;
+    bool rejected = false;
+    try {
+        (void)dispatch(request("add_object", {{"effect", "存在しない"}, {"layer", 54}, {"frame", 0}}, true));
+    } catch (const BridgeError& error) {
+        rejected = error.code() == "HOST_REJECTED";
+    }
+    mock_reject_create = false;
+    assert(rejected);
+
+    // 引数不正はINVALID_ARGUMENT
+    bool invalid = false;
+    try {
+        (void)dispatch(request("add_from_alias", {{"alias", ""}, {"layer", 0}, {"frame", 0}}, true));
+    } catch (const BridgeError& error) {
+        invalid = error.code() == "INVALID_ARGUMENT";
+    }
+    assert(invalid);
+}
+
 }  // namespace
 
 int main() {
@@ -626,6 +688,7 @@ int main() {
     assert(size_error.at("id") == 42);
     assert(size_error.at("error").at("code") == "RESPONSE_TOO_LARGE");
 
+    test_generic_object_creation();
     test_workspace_operations();
 
     std::cout << "bridge dispatch tests passed\n";
